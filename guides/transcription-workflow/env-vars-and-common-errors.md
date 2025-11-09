@@ -1,3 +1,5 @@
+# Appendix - Environment Variables & Common Errors
+
 This appendix expands on environment configuration and troubleshooting for the **Google Drive → Faster-Whisper transcription workflow**.
 
 ---
