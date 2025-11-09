@@ -1,3 +1,5 @@
+# Transcriber Script Detailed Breakdown.md
+
 This document explains **what your script does**, **why each stage exists**, and **how the pieces fit together**. It’s organized into bite‑sized sections that map to the main functions and logic in your code. Flowcharts (Mermaid) illustrate the high‑level flow and the per‑file pipeline.
 
 > Script filename assumed: `transcribe_from_links.py` 
