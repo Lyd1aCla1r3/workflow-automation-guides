@@ -1,3 +1,5 @@
+# Google Drive Transcription Workflow Setup & Usage Guide
+
 This workflow automates the download and transcription of large, technical videos from Google Drive using `faster-whisper`. Transcripts are saved locally in the same directory where you run the script.
 
 ---
@@ -92,9 +94,9 @@ protobuf>=4.25,<5
 Steps:
 
 1. Enable **Google Drive API** in [Google Cloud Console](https://console.cloud.google.com/).
-1. Download `credentials.json` into your `transcriber/` folder.
-1. On first run, a browser window will open. Sign in with your Google account.
-1. A `token.json` will be created and cached for future runs.
+2. Download `credentials.json` into your `transcriber/` folder.
+3. On first run, a browser window will open. Sign in with your Google account.
+4. A `token.json` will be created and cached for future runs.
 
 ---
 
