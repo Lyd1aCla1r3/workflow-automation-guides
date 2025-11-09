@@ -1,4 +1,4 @@
----
+# Redirects Workflow Guide
 
 ## TL;DR: Quickstart
 
@@ -26,11 +26,11 @@ bash run_all.sh apim
 This will:
 
 1. Extract all text from Markdown files.
-1. Create embeddings.
-1. Build an approximate search index.
-1. Match similar pages across versions.
-1. Generate forward/backward redirect YAMLs.
-1. Reconcile them into clean, de-duplicated redirect sets.
+2. Create embeddings.
+3. Build an approximate search index.
+4. Match similar pages across versions.
+5. Generate forward/backward redirect YAMLs.
+6. Reconcile them into clean, de-duplicated redirect sets.
 
 ### 4️⃣ Output summary
 
@@ -212,8 +212,8 @@ But we need to decide _which_ destination to keep.
 **Alternative options:**
 
 1. **Latest-wins:** Always prefer the destination from the newest version.
-1. **Oldest-wins:** Keep the earliest mapping for historical continuity.
-1. **Weighted:** Combine metadata (e.g., page length, similarity score) to choose the strongest match.
+2. **Oldest-wins:** Keep the earliest mapping for historical continuity.
+3. **Weighted:** Combine metadata (e.g., page length, similarity score) to choose the strongest match.
 
 **CSV logs:** Every time a duplicate is removed, it logs the decision in `strip_collisions.csv`:
 
