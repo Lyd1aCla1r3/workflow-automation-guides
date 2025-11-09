@@ -1,16 +1,18 @@
-# TL;DR
+# Gravitee APIM Release Notes Pipeline
 
-## Prerequisites
+## TL;DR
+
+### Prerequisites
 
 Before running the reducer script, ensure you have the following set up:
 
 1. **Node.js Installed**
     - You need Node.js (v18 or later recommended).
     - Verify with: `node -v`
-1. **Git Installed**
+2. **Git Installed**
     - The script interacts with a Git repository, so Git must be installed.
     - Verify with: `git --version`
-1. **Cloned Documentation Repository**
+3. **Cloned Documentation Repository**
     - Clone the documentation repo you want to analyze, for example:
 
 ```bash
@@ -18,7 +20,7 @@ git clone https://github.com/gravitee-io/gravitee-platform-docs.git
 cd gravitee-platform-docs
 ```
 
-## Execution
+### Execution
 
 ```bash
 # One-time
@@ -32,7 +34,7 @@ source env.sh
 
 ---
 
-# Deep Dive
+## Deep Dive
 
 > **Audience:** Senior engineers and doc-ops maintainers who need to understand, extend, or debug the Gravitee release notes generator.
 > **Goal:** By reading this guide, you should be able to **re‑implement** the pipeline from scratch, reason about its heuristics, and adjust tunables safely.
@@ -50,16 +52,16 @@ source env.sh
 
 ---
 
-## 0) Big‑Picture Overview
+### 0) Big‑Picture Overview
 
-### TL;DR
+#### TL;DR
 
 A reproducible **two‑phase** pipeline:
 
 1. **Collection & Shaping:** Gather candidate doc pages (snapshot or commit window), normalize and **extract only net‑new content**, then emit **per‑page LLM prompts**.
-1. **Summarization & Assembly:** Human (or model) returns JSONL summaries → **merge**, **de‑dupe**, and **render** final `ReleaseNotes.md` + audits.
+2. **Summarization & Assembly:** Human (or model) returns JSONL summaries → **merge**, **de‑dupe**, and **render** final `ReleaseNotes.md` + audits.
 
-### High‑Level Flow
+#### High‑Level Flow
 
 ```mermaid
 flowchart LR
@@ -113,13 +115,13 @@ flowchart LR
 
 ---
 
-## 1) Environment & Tunables (Global)
+### 1) Environment & Tunables (Global)
 
-### TL;DR
+#### TL;DR
 
 All scripts read **environment variables** for product/version scoping, date ranges, gating, and formatting. Sensible defaults exist, but **changing thresholds** alters what counts as “net‑new” vs “rephrasing” and how items cluster into highlights.
 
-### Global Variables (from `env.sh` and used across scripts)
+#### Global Variables (from `env.sh` and used across scripts)
 
 | Variable | Default | Used by | Effect / Behavior | Notes & Gotchas |
 | --- | --- | --- | --- | --- |
@@ -151,13 +153,13 @@ All scripts read **environment variables** for product/version scoping, date ran
 
 ---
 
-## 2) `collect_snapshot.js` — Snapshot Collector
+### 2) `collect_snapshot.js` — Snapshot Collector
 
-### TL;DR
+#### TL;DR
 
 Walks `docs/${PRODUCT}/${VERSION}` and **includes only files whose** basename **starts with `DOCS_FILENAME_PREFIX`** (e.g., `4.9-*.md`). Produces a **single synthetic commit** into `rn.jsonl` with basic per‑file metrics measured on the current working tree. Also writes a simple listing (`rn.md`).
 
-### Sequence & Data
+#### Sequence & Data
 
 ```mermaid
 sequenceDiagram
@@ -174,7 +176,7 @@ sequenceDiagram
   C->>O: Write rn.jsonl (single event {commit:synthetic, files:[...]}) + rn.md listing
 ```
 
-### What the code does (reverse‑engineering detail)
+#### What the code does (reverse‑engineering detail)
 
 - **Discovery:** Iterative DFS with `fs.readdir({ withFileTypes:true })`, collecting `*.md` files.
 - **Filter:** `path.basename(rel)` must start with `FNAME_PREFIX` (env → `DOCS_FILENAME_PREFIX`, default `"4.9"`).
@@ -186,25 +188,25 @@ sequenceDiagram
 - **Synthetic commit:** `commit.hash = HEAD~short`, `parent = same as hash`, `synthetic=true` (signals snapshot mode downstream). Subject is `[snapshot] <prefix> files in docs/<product>/<version>`.
 - **Output:** A **single** JSONL line with `{ commit, files: [...] }` sorted by path for reproducibility.
 
-### Tunables affecting this stage
+#### Tunables affecting this stage
 
 - `DOCS_FILENAME_PREFIX` (critical funnel)
 - `PRODUCT`, `VERSION`, `REPO_DIR`
 
-### Gotchas
+#### Gotchas
 
 - **Only the current working tree** is measured — no diffs. That is intentional; “insertions‑only” logic happens later in the reducer.
 - Metric units are **heterogeneous** (words vs code lines). The numbers are for **relative** signal in final metrics tables, not strict counts.
 
 ---
 
-## 3) `git_release_notes_from_git.js` — Commit‑Window Collector
+### 3) `git_release_notes_from_git.js` — Commit‑Window Collector
 
-### TL;DR
+#### TL;DR
 
 Scans the Git history (optionally date‑bounded) for changes under `docs/${PRODUCT}/${VERSION}/`, but **keeps only pages with the `hidden: true` + `noIndex: true` front‑matter** and additionally gate them by a **HEAD‑aware allowlist** when `DOCS_FILENAME_PREFIX` is set. Emits **one JSONL event per commit**, each containing a compact list of files and **word‑change stats**.
 
-### Control Flow
+#### Control Flow
 
 ```mermaid
 flowchart TD
@@ -228,7 +230,7 @@ flowchart TD
   N --> O[write per-commit record to JSONL + MD rollup]
 ```
 
-### Key Mechanics & Heuristics
+#### Key Mechanics & Heuristics
 
 - **HEAD‑aware allowlist** (when `DOCS_FILENAME_PREFIX` is set):
     - Scan **HEAD** files under the docs prefix, bucket by directory.
@@ -240,26 +242,26 @@ flowchart TD
     - `proseChanges`, `codeChanges`, `totalWordChanges` (symmetric edit distance in token space).
 - **Section extraction:** First folder segment after `docs/${PRODUCT}/${VERSION}/` becomes the “section”.
 
-### Tunables specific to this script
+#### Tunables specific to this script
 
 - `START_DATE`, `END_DATE`, `BRANCH`
 - `DOCS_FILENAME_PREFIX` (activates allowlist)
 - `REPO_DIR` vs `REPO_URL` (determine local vs ephemeral clone)
 
-### Gotchas
+#### Gotchas
 
 - The **allowlist is built from HEAD**, so if you change the prefix mid‑run, historical commits not represented at HEAD will be **ignored by design**.
 - The **front‑matter requirement** is strict — missing either `hidden` or `noIndex` drops the file. This was chosen to target RN‑staging pages only.
 
 ---
 
-## 4) `reduce_for_llm.js` — The Shaper (the hard part)
+### 4) `reduce_for_llm.js` — The Shaper (the hard part)
 
-### TL;DR
+#### TL;DR
 
 For each candidate page from `rn.jsonl`, generate a **self‑contained prompt** (BEFORE/AFTER/EXCERPTS) tailored to **net‑new content only**. Prefixed pages (`4.9-*.md`) are special: the reducer attempts to locate a **non‑prefixed twin** and then extract **insertions‑only** content to minimize rephrasing noise. The output is a bundle folder with `pages.jsonl` and a helpful `task_prompt.txt` for batch prompting.
 
-### Modes, Inputs & Outputs
+#### Modes, Inputs & Outputs
 
 ```mermaid
 stateDiagram-v2
@@ -292,21 +294,21 @@ stateDiagram-v2
   WritePagesJSONL --> [*]
 ```
 
-### Twin Detection (Snapshot vs Commits)
+#### Twin Detection (Snapshot vs Commits)
 
 - **Snapshot (`commit.synthetic === true` or `COLLECT_MODE=snapshot`)**
     1. AFTER = working tree file content.
-    1. If **basename starts with prefix**:
+    2. If **basename starts with prefix**:
         - **Same‑folder twin by filename:** remove prefix (with separators `[\s._-]*`) and look for file `<dir>/<basename-without-prefix>`.
         - Else: **H1‑based twin:** strip prefix from H1 in AFTER; scan siblings in same folder that **do not** start with the prefix; pick the one whose first H1 **exactly equals** the stripped title.
         - If twin found ⇒ `mode="insertions-only"`, `BEFORE=twin content`.
         - Else ⇒ `mode="brand-new"`, `BEFORE=""`.
-    1. Non‑prefixed files are treated as `brand-new` in snapshot mode (by design).
+    3. Non‑prefixed files are treated as `brand-new` in snapshot mode (by design).
 - **Commits mode**
     - BEFORE = `git show <parent>:<path>`; AFTER = `git show <hash>:<path>`.
     - If basename starts with prefix, try filename twin at **parent**, else H1 twin at **parent**. If found ⇒ insertions‑only with the **twin** as baseline; otherwise brand‑new. Non‑prefixed files ⇒ `mode="normal"` and use unified diff.
 
-### Insertions‑Only Extraction (core algorithm)
+#### Insertions‑Only Extraction (core algorithm)
 
 > Produces a **stable “EXCERPTS” block** that contains **only** newly introduced, user‑visible content, in priority order. This is the reduction that keeps the LLM honest.
 
@@ -358,7 +360,7 @@ flowchart TD
 
 **Other structural signals:** new H2/H3+ headings, new tables (>= 3 consecutive `|` lines), new code fences (``` count difference / 2).
 
-### Editorial/Rephrase Guards (important)
+#### Editorial/Rephrase Guards (important)
 
 - **Purely editorial skip (insertions‑only only):**
 - If **no new headings/tables/fences**, `semanticDelta(BEFORE, AFTER) ≤ 0.06`, and **EXCERPTS prose tokens ≤ 25**, mark as `"purely-editorial"` and **skip** the page.
@@ -367,12 +369,12 @@ flowchart TD
 
 > These guards are the reason innocuous rewordings do not produce RN churn.
 
-### Normal Mode (non‑prefixed files in commits mode)
+#### Normal Mode (non‑prefixed files in commits mode)
 
 - Use `git --no-pager diff --no-index -U${CONTEXT_LINES}` to compute a unified diff.
 - Count only **added lines** to derive `insertedProse/Code` metrics for hinting.
 
-### Emitted Bundle
+#### Emitted Bundle
 
 - `task_prompts/<bundle>/pages.jsonl`: each line = **one page task**
 
@@ -395,7 +397,7 @@ flowchart TD
 - `task_prompts/<bundle>/meta.json`: **commit metadata only** (hash, date, author, subject).
 - _(Note: `summaries_to_md.js` tries to read `meta.json.pages[...]` as an optional hint; current reducer does not populate it — harmless.)_
 
-### Tunables & Practical Impact
+#### Tunables & Practical Impact
 
 | Tunable | Where | Impact |
 | --- | --- | --- |
@@ -406,7 +408,7 @@ flowchart TD
 | `MAX_EXCERPT_CHARS` | clamp | Prevents over‑long prompts; too small may truncate legitimate large inserts. |
 | `SKIP_LANGUAGE_ONLY` + `LANGUAGE_ONLY_THRESHOLD` | normal mode only | Avoids generating tasks for diffs that are mostly editorial. |
 
-### Gotchas & Subtleties
+#### Gotchas & Subtleties
 
 - **H1 twin match is exact.** Any punctuation drift breaks it; that’s why filename twin is tried first.
 - **Front‑matter is stripped** for comparisons; otherwise boilerplate YAML changes create false deltas.
@@ -417,13 +419,13 @@ flowchart TD
 
 ---
 
-## 5) `prep_batches.sh` and `make_page_prompts.sh` — Fan‑Out for Upload
+### 5) `prep_batches.sh` and `make_page_prompts.sh` — Fan‑Out for Upload
 
-### TL;DR
+#### TL;DR
 
 Discovery + presentation. `prep_batches.sh` summarizes bundles and resets `upload_batches/`. `make_page_prompts.sh` **materializes one `.txt` file per page task**, concatenating the system prompt, mode/twin hints, and the BEFORE/AFTER/EXCERPTS blocks. These are the exact files you upload to ChatGPT.
 
-### Flow
+#### Flow
 
 ```mermaid
 flowchart LR
@@ -432,30 +434,30 @@ flowchart LR
   C --> D[upload_batches/<bundle>_page_###.txt]
 ```
 
-### Notable Behaviors
+#### Notable Behaviors
 
 - `make_page_prompts.sh` is **POSIX‑portable** (macOS bash 3.2): no `mapfile`, uses `find -print0` + `while ... read -d ''`.
 - Uses `jq` to extract `.system` and `.user` strings from each JSON line; writes a single flat text file per page with:
     1. System instructions
-    1. An **extra guidance** heredoc block (immutable rules about `"kind"` defaults by mode)
-    1. Mode + Twin single‑line hints
-    1. User prompt with fenced BEFORE/AFTER/EXCERPTS
+    2. An **extra guidance** heredoc block (immutable rules about `"kind"` defaults by mode)
+    3. Mode + Twin single‑line hints
+    4. User prompt with fenced BEFORE/AFTER/EXCERPTS
 - File naming: `<bundle>_page_001.txt`, `<bundle>_page_002.txt`, …
 
-### Gotchas
+#### Gotchas
 
 - **CR stripping**: text is normalized with `tr -d '\r'` to avoid macOS CRLF issues.
 - If `.system`/`.user` are missing the file is skipped (defensive `jq -e` test).
 
 ---
 
-## 6) Human/LLM Round‑Trip + `merge_jsonl.sh`
+### 6) Human/LLM Round‑Trip + `merge_jsonl.sh`
 
-### TL;DR
+#### TL;DR
 
 You upload all page files into ChatGPT along with a batch prompt (saved as `upload_batches/BATCH_PROMPT.txt`). ChatGPT returns **one or more JSON objects per page** (one per line). You save these to `upload_batches/summary_###.jsonl` **or** as a single root‑level `summaries.jsonl`. `merge_jsonl.sh` scans, **extracts balanced JSON objects** (even from prose), validates fields, and writes a clean `summaries.jsonl` de‑duplicated set.
 
-### Merge Mechanics
+#### Merge Mechanics
 
 - Searches inputs in order:
     1. If a root‑level `${SUMMARIES_JSONL}` exists → use it.
@@ -466,20 +468,20 @@ You upload all page files into ChatGPT along with a batch prompt (saved as `uplo
 - **Robust JSON extraction**: streaming brace‑balancing scanner that tolerates garbage around/inside lines (no regex JSON).
 - **Validation**: object must have **string** fields `sha`, `path`, `summary`, `update_key`, `kind` where `kind ∈ {new, updated}` (case‑insensitive).
 
-### Gotchas
+#### Gotchas
 
 - The merger is **idempotent** and de‑dupes by full JSON line; it keeps **both** lines if semantically identical but with different whitespace inside `summary` — because after normalization strings compare equal inside the writer, not before.
 - If nothing valid found, it still creates an empty `${SUMMARIES_JSONL}` to avoid downstream crashes.
 
 ---
 
-## 7) `summaries_to_md.js` — Finalizer & Highlight Synthesizer
+### 7) `summaries_to_md.js` — Finalizer & Highlight Synthesizer
 
-### TL;DR
+#### TL;DR
 
 Consumes `summaries.jsonl` (LLM outputs) and `rn.jsonl` (for metrics). Groups by `update_key`, **collapses near‑duplicate summaries per key**, chooses a **canonical bullet** for each key, synthesizes **thematic Highlights** by clustering bullets, injects a **Modified Pages** metrics table, and writes outputs: `ReleaseNotes.md` + compact audits.
 
-### Processing Pipeline
+#### Processing Pipeline
 
 ```mermaid
 flowchart TD
@@ -496,7 +498,7 @@ flowchart TD
     K --> L["Write audits: JSONL (counts per section), MD (summary stats)"]
 ```
 
-### Similarity & Clustering Tunables
+#### Similarity & Clustering Tunables
 
 | Variable | Default | Where | Effect |
 | --- | --- | --- | --- |
@@ -505,29 +507,29 @@ flowchart TD
 | `HIGHLIGHT_MAX_GROUP` | `6` | Theme clustering | Prevents mega clusters; extra items spawn new themes. |
 | `HIGHLIGHTS_COUNT` | `8` | Final output | Caps the number of highlights rendered. |
 
-### Canonicalization Strategy
+#### Canonicalization Strategy
 
 - Score each candidate summary with: `score = 2*(kind==='new') + min(1, len/300)`; tie‑break by `path`, then `sha`.
 - → favors **new** items and reasonably descriptive text without rewarding verbosity.
 
-### Metrics Injection
+#### Metrics Injection
 
 - `rn.jsonl` supplies per‑path `{prose, code, total}` (from collectors). Finalizer adds rows **only for pages that appear in the detailed bullets**, keeping the table relevant.
 
-### Gotchas
+#### Gotchas
 
 - **Optional meta hints:** `summaries_to_md.js` attempts to load `task_prompts/*/meta.json` and read a non‑existent `pages` array to coerce `"kind"`. This path is **safe** (try/catch + guard); current reducer only writes commit meta. If you later extend `meta.json` with page hints, the coercion logic already exists.
 - If `summaries.jsonl` is missing, it writes a minimal Release Notes file with a warning and exits gracefully.
 
 ---
 
-## 8) `restart.sh` — Orchestrator
+### 8) `restart.sh` — Orchestrator
 
-### TL;DR
+#### TL;DR
 
 One‑button, reproducible runs. Cleans prior artifacts, executes collection (snapshot or commits), reduction, batch prep, fan‑out, pauses for human upload/merge, then finalizes artifacts and archives them with timestamps.
 
-### Orchestration Steps
+#### Orchestration Steps
 
 ```mermaid
 sequenceDiagram
@@ -561,7 +563,7 @@ sequenceDiagram
     F-->>R: produce ReleaseNotes.md and audits and archive copies
 ```
 
-### Safety & UX touches
+#### Safety & UX touches
 
 - **Safe cleanup** deletes only known paths (and only if they exist). `DEEP_CLEAN=1` also removes the collector outputs to force a full rebuild.
 - Prints a **prompt file** (`upload_batches/BATCH_PROMPT.txt`) and copies it to clipboard on macOS (`pbcopy`) for convenience.
@@ -569,18 +571,18 @@ sequenceDiagram
 
 ---
 
-## 9) Data Contracts & File Formats
+### 9) Data Contracts & File Formats
 
-### `rn.jsonl` (collectors)
+#### `rn.jsonl` (collectors)
 
 - **Snapshot**: single line with `synthetic: true` and `files: [{path, proseChanges, codeChanges, totalWordChanges}]` where metrics are measured on AFTER only.
 - **Commits**: many lines (one per commit), each with `commit{hash,parent,date,author,subject}`, `files:[{path,section,proseChanges,codeChanges,totalWordChanges,date}]`, and per‑commit totals.
 
-### `task_prompts/<bundle>/pages.jsonl`
+#### `task_prompts/<bundle>/pages.jsonl`
 
 - Each line is a **complete LLM task** (see reducer section). Consumers (`make_page_prompts.sh`, notebooks, etc.) treat it as the **single source of truth** for what to upload.
 
-### LLM Output JSONL (per line)
+#### LLM Output JSONL (per line)
 
 ```
 {
@@ -594,7 +596,7 @@ sequenceDiagram
 
 > **Invariant:** `update_key` is a **semantic** slug of WHAT changed (stable across pages), not a page title.
 
-### Final Outputs
+#### Final Outputs
 
 - `ReleaseNotes.md`: Highlights → Sections (with **"New" / "Updated" badges**) → Modified Pages (metrics table).
 - `ReleaseNotes.audit.jsonl`: one line per section with counts.
@@ -602,7 +604,7 @@ sequenceDiagram
 
 ---
 
-## 10) Edge Cases the Pipeline Handles
+### 10) Edge Cases the Pipeline Handles
 
 | Case | Where handled | Mechanism |
 | --- | --- | --- |
@@ -621,21 +623,21 @@ sequenceDiagram
 
 ---
 
-## 11) Preconditions & Reliability Criteria
+### 11) Preconditions & Reliability Criteria
 
 For **correct and consistent execution**:
 
 1. **Repository layout:** `docs/${PRODUCT}/${VERSION}/**/*.md` must exist, and versioned RN pages must use the **filename prefix** convention (e.g., `4.9-*.md`).
-1. **Node & Git:** Node.js ≥ 16 and Git installed on `PATH`.
-1. **`jq` installed** (used by `make_page_prompts.sh`).
-1. **Commit collector only:** the HEAD branch must be fetchable (for allowlist) and the date window must be valid.
-1. **Front‑matter RN staging:** Pages intended for commit collector must include both `hidden: true` and `noIndex: true`.
-1. **Permissions:** Scripts need read/write access in the working directory (create `task_prompts/`, `upload_batches/`, `rn_docs/`).
-1. **LLM Outputs:** Each JSON line must include **all required fields** with non‑empty strings; `kind` must be `new` or `updated`.
+2. **Node & Git:** Node.js ≥ 16 and Git installed on `PATH`.
+3. **`jq` installed** (used by `make_page_prompts.sh`).
+4. **Commit collector only:** the HEAD branch must be fetchable (for allowlist) and the date window must be valid.
+5. **Front‑matter RN staging:** Pages intended for commit collector must include both `hidden: true` and `noIndex: true`.
+6. **Permissions:** Scripts need read/write access in the working directory (create `task_prompts/`, `upload_batches/`, `rn_docs/`).
+7. **LLM Outputs:** Each JSON line must include **all required fields** with non‑empty strings; `kind` must be `new` or `updated`.
 
 ---
 
-## 12) Assumptions (Design Contracts)
+### 12) Assumptions (Design Contracts)
 
 - RN pages follow a **version‑prefixed file naming** scheme (`<prefix>-<slug>.md`) and share a **non‑prefixed twin** with the **same H1** in the **same folder**.
 - A **new page** for a release is introduced as a **prefixed** file; the non‑prefixed twin is the “baseline” documentation.
@@ -646,30 +648,30 @@ For **correct and consistent execution**:
 
 ---
 
-## 13) Troubleshooting Guide (“Gotchas” Recap)
+### 13) Troubleshooting Guide (“Gotchas” Recap)
 
 1. **“Why did my new content not appear?”**
     - Check if it’s only rewording; the editorial/rephrase guards may have suppressed it.
     - Ensure it’s a **new H2+** section, a **new `<details>`**, a **new table**, or a **new code fence** for the reducer to capture it.
-1. **“Twin not found; page treated as brand‑new.”**
+2. **“Twin not found; page treated as brand‑new.”**
     - Confirm the **H1 without prefix** exactly matches the non‑prefixed sibling’s H1.
     - Check filename twin path (`<dir>/<basename-without-prefix>`).
     - Verify the file lives in the **same directory**.
-1. **“Merged highlights feel off.”**
+3. **“Merged highlights feel off.”**
     - Adjust `HIGHLIGHT_SIM_THRESHOLD` (↑ tighter, ↓ looser) and `HIGHLIGHTS_COUNT`.
     - Inspect `ReleaseNotes.audit.jsonl` to see section distribution.
-1. **“Summaries missing or malformed.”**
+4. **“Summaries missing or malformed.”**
     - Run `./merge_jsonl.sh` again and inspect console for `WROTE=N`.
     - Open the raw `.jsonl` files to ensure objects aren’t inside triple backticks (the merger strips them, but check fields).
-1. **“It skipped my commit.”** _(commit collector)_
+5. **“It skipped my commit.”** _(commit collector)_
     - Ensure the changed page has `hidden: true` **and** `noIndex: true`.
     - If using `DOCS_FILENAME_PREFIX`, verify the file (or its twin) exists at **HEAD**.
-1. **“Metrics table shows 0s.”**
+6. **“Metrics table shows 0s.”**
     - Those numbers come from collectors; snapshot counts words/lines **at HEAD**, not diffs. Commits mode reports LCS deltas per commit. Ensure the path is present in summaries for the row to appear.
 
 ---
 
-## 14) Reverse‑Engineering Notes (Why each choice was made)
+### 14) Reverse‑Engineering Notes (Why each choice was made)
 
 - **Trigram Jaccard** is a good proxy for **semantic similarity** that tolerates light re‑phrasing but flunks major insertions. Different thresholds (0.92 vs 0.78 vs 0.62) map to **three tiers**: rephrase guard, same‑key dedupe, highlight theming.
 - **Details → Tables → Fences → New Sections** priority reflects typical RN authoring patterns: collapsible details often carry the instructive net additions, followed by structured artifacts; we emit sections last to avoid echoing content already captured inside details.
@@ -679,18 +681,18 @@ For **correct and consistent execution**:
 
 ---
 
-## 15) Quick Start (Happy Path)
+### 15) Quick Start (Happy Path)
 
 1. Edit `env.sh` with your `PRODUCT`, `VERSION`, and (if commits mode) `START_DATE/END_DATE` and `DOCS_FILENAME_PREFIX`.
-1. Run: `./restart.sh`
+2. Run: `./restart.sh`
     - Choose `COLLECT_MODE=snapshot` (default) or export `COLLECT_MODE=commits` beforehand.
-1. Upload files from `upload_batches/` to ChatGPT using the printed prompt; save replies to `upload_batches/summary_*.jsonl` or combine into a root `summaries.jsonl`.
-1. Press **Enter** back in the terminal to let the orchestrator **merge** and **finalize**.
-1. Open `ReleaseNotes.md`, `ReleaseNotes.audit.*`, and the archived copies under `rn_docs/`.
+3. Upload files from `upload_batches/` to ChatGPT using the printed prompt; save replies to `upload_batches/summary_*.jsonl` or combine into a root `summaries.jsonl`.
+4. Press **Enter** back in the terminal to let the orchestrator **merge** and **finalize**.
+5. Open `ReleaseNotes.md`, `ReleaseNotes.audit.*`, and the archived copies under `rn_docs/`.
 
 ---
 
-## 16) Full Tunables Matrix (by script)
+### 16) Full Tunables Matrix (by script)
 
 | Script | Variable | Default | Type | Range/Values | Effect |
 | --- | --- | --- | --- | --- | --- |
@@ -714,9 +716,9 @@ For **correct and consistent execution**:
 
 ---
 
-## 17) Appendix — Pseudocode for the Tricky Bits
+### 17) Appendix — Pseudocode for the Tricky Bits
 
-### A) Insertions‑Only `insertedOnly(before, after)` (abridged)
+#### A) Insertions‑Only `insertedOnly(before, after)` (abridged)
 
 ```
 normalize() = stripFrontMatter; drop <figure>; neutralize links; ignore prefix in headings
@@ -741,7 +743,7 @@ and whose bodies are not contained in BEFORE (≥0.88).
 Finally, dedupe structurally and clamp total characters to MAX_EXCERPT_CHARS.
 ```
 
-### B) Editorial & Rephrase Guards
+#### B) Editorial & Rephrase Guards
 
 ```
 purelyEditorial = (newHeads==0 && newTables==0 && newFences==0 &&
@@ -755,7 +757,7 @@ rephrasedOnly = (jaccardTrigram(before, after) >= 0.92 &&
 
 ---
 
-## 18) Versioning & Portability Notes
+### 18) Versioning & Portability Notes
 
 - Works on macOS and Linux shells; Windows via WSL recommended.
 - Node scripts avoid external NPM deps; pure `fs`, `child_process`, `path` etc.
