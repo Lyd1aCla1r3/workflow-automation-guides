@@ -1,4 +1,4 @@
-_Last updated: 2025-10-07_
+# Jira “Time in Status” Metrics Collection & Post‑Processing Guide
 
 This document explains how our metrics are collected from Jira, how we post‑process the raw CSVs, and what every output column means. It’s written so you can walk a teammate through the whole flow, end‑to‑end.
 
