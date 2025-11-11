@@ -110,7 +110,7 @@ The main export writes **hours**. A post‑processing script then:
 **What it does**
 
 ***Map raw Jira → display labels*** (and do it idempotently):
-    - Mapping table we use:
+- Mapping table we use:
 
 | Raw Jira | Display |
 | --- | --- |
@@ -122,17 +122,21 @@ The main export writes **hours**. A post‑processing script then:
 | Doc Review | **Peer Review** |
 | Done | **Done** |
 
-    - Display column order we enforce everywhere: `Not Started, Started, To Do, In Progress, Peer Review, Done`
+- Display column order we enforce everywhere: `Not Started, Started, To Do, In Progress, Peer Review, Done`
+
 ***Merge collisions safely***
-   - If multiple raw statuses map to the same display label (e.g., _In Progress_ and _In Code Review_ → **Started**), the script **sums** their values into the same display column.
+- If multiple raw statuses map to the same display label (e.g., _In Progress_ and _In Code Review_ → **Started**), the script **sums** their values into the same display column.
+
 ***Convert hours → days (24h)***
-    - Converts only when the source column is `__total_hours` (or `duration_hours`, `sum_hours`, `mean_hours`), so you can re‑run the post‑processor and never double‑divide.
-    - Outputs new files with a `_days.csv` suffix.
+- Converts only when the source column is `__total_hours` (or `duration_hours`, `sum_hours`, `mean_hours`), so you can re‑run the post‑processor and never double‑divide.
+- Outputs new files with a `_days.csv` suffix.
+  
 ***Guarantee all six display columns*** in the per‑issue CSV
-    - Even if the raw export happened to omit a column (e.g., no issue had time in “To Do”), the post‑processor **creates** it and fills with `0.00`, so your sheets/charts can rely on a stable schema.
+- Even if the raw export happened to omit a column (e.g., no issue had time in “To Do”), the post‑processor **creates** it and fills with `0.00`, so your sheets/charts can rely on a stable schema.
+  
 ***Filter `Done` rows by `Resolution` = “Done” (best‑effort)***
-    - If a CSV has a `Resolution` column, the post‑processor **keeps all non‑Done** rows and only keeps **Done** rows whose `Resolution` is exactly “Done” (case‑insensitive).
-    - If a CSV **doesn’t** include a `Resolution` column, we can’t enforce this automatically for that file type (limitation of the source). See “Strong filtering options” below.
+- If a CSV has a `Resolution` column, the post‑processor **keeps all non‑Done** rows and only keeps **Done** rows whose `Resolution` is exactly “Done” (case‑insensitive).
+- If a CSV **doesn’t** include a `Resolution` column, we can’t enforce this automatically for that file type (limitation of the source). See “Strong filtering options” below.
 
 **Outputs (post‑processor)**
 
@@ -232,7 +236,9 @@ python postprocess_jira_csvs.py
 ```
 
 You’ll see `*_days.csv` files appear for each source CSV.
+
 4. **Analyze / share**
+   
 Import the `*_days.csv` into Sheets/Excel/BI. Build pivot charts by **project** and **status** using `sum_days`, `mean_days`, and the percentile columns.
 
 ---
