@@ -96,31 +96,31 @@ Always use this order:
 
 1. **Title**
     - Filename converted to title (remove underscores, keep colons if present).
-1. **Executive Summary**
+2. **Executive Summary**
     - Concise overview of what the session covered.
     - State purpose: certification-ready, all technical details included.
-1. **Architecture Overview**
+3. **Architecture Overview**
     - High-level explanation of Gravitee platform components.
     - Mermaid architecture diagram if transcript supports it.
-1. **Products & Features**
+4. **Products & Features**
     - Bullet-point description of whichever products are mentioned (e.g., APIM, AM, Cockpit, GKO, Alert Engine)
-1. **Technical Deep Dives**
+5. **Technical Deep Dives**
     - One subsection per concept (e.g., GKO & Hybrid Mode, Agent Mesh, ConfigMaps, policy flows).
     - Explanatory prose + bullets + flow/architecture diagrams where applicable.
-1. **Business Concerns**
+6. **Business Concerns**
     - Only include this section if applicable!
     - Tables if useful (e.g., compare indirect vs direct monetization).
-1. **Best Practices**
+7. **Best Practices**
     - Implicit recommendations.
-1. **Recommendations**
+8. **Recommendations**
     - Ordered numbered list of key recommendations explicitly mentioned.
-1. **Appendix**
+9. **Appendix**
     - Diagrams or tables for concepts that were only hinted at.
-1. **Study Questions**
+10. **Study Questions**
 - 10–15 multiple-choice questions
 - 4 answer options each, randomized correct answer position
 - Use numbers for the questions and letters for the answers.
-1. **Answers**
+11. **Answers**
 - List the question/answer pairs in order. For example:
     1. C
     1. A
